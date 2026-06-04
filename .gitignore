@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+allure-results/
+allure-report/
+htmlcov/
+.coverage
+report.html
