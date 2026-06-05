@@ -39,7 +39,8 @@ jobs:
     name: Publish Allure Report
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # Publish even when tests fail — that's exactly when the report matters most.
+    if: always() && github.ref == 'refs/heads/main'
     permissions:
       contents: write
 

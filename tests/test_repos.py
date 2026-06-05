@@ -33,7 +33,10 @@ class TestListRepositories:
 
     @allure.story("List public repos for a user")
     def test_list_public_repos_are_public(self, client: GitHubAPIClient, username: str):
-        response = client.get(f"/users/{username}/repos", params={"type": "public", "per_page": 10})
+        # /users/{username}/repos accepts type ∈ {all, owner, member}; it never
+        # returns private repos, so the assertion verifies that guarantee holds.
+        response = client.get(f"/users/{username}/repos", params={"type": "owner", "per_page": 10})
+        assert response.status_code == 200, response.text
         for repo in response.json():
             assert repo["private"] is False
 
@@ -80,11 +83,13 @@ class TestGetRepository:
     @allure.story("Get a single repository")
     def test_get_repo_name_matches(self, client: GitHubAPIClient, username: str, public_repo: str):
         response = client.get(f"/repos/{username}/{public_repo}")
+        assert response.status_code == 200, response.text
         assert response.json()["name"] == public_repo
 
     @allure.story("Get a single repository")
     def test_get_repo_owner_matches(self, client: GitHubAPIClient, username: str, public_repo: str):
         response = client.get(f"/repos/{username}/{public_repo}")
+        assert response.status_code == 200, response.text
         assert response.json()["owner"]["login"].lower() == username.lower()
 
     @allure.story("Get a single repository")

@@ -26,11 +26,13 @@ class TestPublicUser:
     @allure.story("Get public user profile")
     def test_get_public_user_login_matches(self, client: GitHubAPIClient, username: str):
         response = client.get(f"/users/{username}")
+        assert response.status_code == 200, response.text
         assert response.json()["login"].lower() == username.lower()
 
     @allure.story("Get public user profile")
     def test_get_public_user_type_is_user(self, client: GitHubAPIClient, username: str):
         response = client.get(f"/users/{username}")
+        assert response.status_code == 200, response.text
         assert response.json()["type"] == "User"
 
     @allure.story("Get public user profile")
@@ -65,7 +67,9 @@ class TestAuthenticatedUser:
             pytest.skip("No token provided — skipping authenticated-only test.")
         body = response.json()
         assert "login" in body
-        assert "email" in body or body.get("email") is None  # email may be private
+        assert "email" in body, "Authenticated user response must include an 'email' field"
+        # email may be private, but when present it must be a string (or null)
+        assert body["email"] is None or isinstance(body["email"], str)
 
     @allure.story("List public emails")
     def test_list_public_emails_requires_auth(self, client: GitHubAPIClient):
