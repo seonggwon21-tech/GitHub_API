@@ -1,6 +1,7 @@
 # GitHub REST API QA Automation
 
-> GitHub REST API(api.github.com) — User · Repository · Issues **총 39 TC**, pytest + requests + Allure 기반 REST API 테스트 자동화 포트폴리오
+> GitHub REST API(api.github.com)의 User · Repository · Issues 엔드포인트를 **pytest + requests**로 검증한 REST API 계약(contract) 검증 포트폴리오
+> — 총 **39 TC** · negative 케이스 포함 · GitHub Actions CI + Allure Pages 자동 배포
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
 ![pytest](https://img.shields.io/badge/pytest-8.x-0A9EDC?logo=pytest&logoColor=white)
@@ -9,104 +10,82 @@
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI-2088FF?logo=githubactions&logoColor=white)
 [![CI](https://github.com/seonggwon21-tech/GitHub_API/actions/workflows/ci.yml/badge.svg)](https://github.com/seonggwon21-tech/GitHub_API/actions/workflows/ci.yml)
 
-> **Claude AI를 적극 활용해** 설계·구현 전 과정을 진행했습니다.
->
-> UI 자동화와 달리 REST API 테스트는 응답 자체가 계약(contract)입니다. 상태 코드가 200인지 확인하는 것에 그치지 않고, 스키마 필드의 존재 여부, 데이터 타입, 페이지네이션 동작, 음성(negative) 케이스까지 검증해야 "API가 올바르게 동작한다"고 말할 수 있다고 생각했습니다.
->
-> `public_repo` fixture 하나가 session scope로 동작하면서 Repository·Issues 테스트 전체에 공유되는 구조가 대표적인 설계 결정입니다. 실제 계정의 공개 레포를 자동으로 탐지해 오는 방식으로, 하드코딩 없이 어떤 계정에서도 동작합니다.
->
-> PAT 스코프에 따라 동일 엔드포인트가 다른 상태 코드를 반환한다는 것도 직접 마주쳤습니다. `/user/emails`가 PAT에 `user:email` 스코프가 없으면 200도 401도 아닌 404를 반환합니다. 단순히 허용 코드에 404를 추가하는 게 아니라, 주석으로 이유를 명시해 다음 사람이 왜 이런 코드가 있는지 이해할 수 있게 했습니다.
-
 ---
 
-## 프로젝트 개요
+## 핵심 성과
 
-**REST API 계약 검증 · 39 TC · 36 passed · 3 skipped · GitHub Actions CI + Allure Pages 자동 배포**
+| 테스트 | 결과 | 검증 범위 | CI | 리포트 |
+|:---:|:---:|:---:|:---:|:---:|
+| **39 TC** (User 12·Repos 16·Issues 11) | **36 passed · 3 skip · 0 fail** | 상태코드·스키마·정합성·negative | **GitHub Actions** | **Allure Pages** |
 
-GitHub REST API의 공개 엔드포인트를 대상으로 상태 코드, 응답 스키마, 데이터 정합성, 음성 케이스, 페이지네이션을 자동으로 검증합니다. `session` scope fixture로 HTTP 세션을 재사용해 테스트 전체에서 연결 오버헤드를 최소화하고, 각 API 호출은 Allure step으로 자동 기록되어 어느 요청에서 무엇이 반환됐는지 리포트에서 추적할 수 있습니다.
+**핵심 기능**
+
+- **상태 코드를 넘어선 계약 검증** — `200`만 확인하는 데 그치지 않고 응답 **스키마 필드 존재·데이터 타입·정합성**(`login`/`owner` 일치, repo `private:false` 보장)까지 검증해 "API가 올바르게 동작한다"를 증명
+- **negative 케이스로 거부 동작까지** — 존재하지 않는 user/repo/issue의 `404`, 잘못된 파라미터(`state=invalid_state`)의 `422`를 명시적으로 검증. 정상 응답만큼 비정상 입력의 응답도 품질의 일부
+- **실계정 공개 레포 자동 탐지** — `public_repo` fixture가 테스트 계정의 공개 레포를 API로 동적 조회 → **레포명 하드코딩 0**, 어떤 계정에서도 그대로 동작
+- **모든 HTTP 호출 Allure step 자동 기록** — `GitHubAPIClient`가 매 요청을 `allure.step`으로 감싸 URL·Status Code·Response Body를 리포트에 자동 첨부 → 어느 요청에서 무엇이 반환됐는지 추적 가능
+
+> 📊 **Live Allure Report** → https://seonggwon21-tech.github.io/GitHub_API/ *(매 `main` push마다 trend 누적 갱신)*
 
 ---
 
 ## 기술 스택
 
-| 분류 | 사용 기술 | 선택 이유 |
-|---|---|---|
-| 언어 | Python 3.12 | requests · pytest · allure 생태계 표준 |
-| HTTP 클라이언트 | requests | `Session` 객체로 헤더·연결 풀 재사용, 인증 헤더 일괄 관리 |
-| 테스트 프레임워크 | pytest 8.x | fixture scope(`session`/`function`) 분리, marker 기반 슬라이스(`smoke`/`user`/`repos`/`issues`) |
-| 리포팅 | allure-pytest | epic/feature/story/step 4계층 + HTTP 요청별 Status Code·Response Body 자동 첨부 |
-| CI/CD | GitHub Actions | push·PR마다 자동 테스트 실행, Allure Report → GitHub Pages 자동 배포 |
-| 환경 관리 | python-dotenv | `.env`로 PAT·사용자명을 코드와 분리, `.gitignore` 처리 |
-
----
-
-## 프로젝트 구조
-
-```
-GitHub_API/
-├── config/
-│   └── settings.py            # BASE_URL, 인증 헤더, 환경변수 로드
-├── utils/
-│   └── api_client.py          # GitHubAPIClient — get/post/patch/delete + allure step 자동 기록
-├── tests/
-│   ├── test_user.py           # User API — 공개 프로필, 인증 유저, followers/following (12 TC)
-│   ├── test_repos.py          # Repository API — 목록, 단건, languages/topics/contributors (16 TC)
-│   └── test_issues.py         # Issues API — 목록, 단건, comments, 페이지네이션 (11 TC)
-├── conftest.py                # client / username / public_repo session-scope fixtures
-├── pytest.ini                 # allure 결과 경로, marker 정의, html 리포트
-├── .github/
-│   └── workflows/
-│       └── ci.yml             # GitHub Actions — 테스트 실행 → Allure Report → GitHub Pages 배포
-├── .env.example               # 환경 변수 템플릿
-└── requirements.txt
-```
+| 분류 | 사용 기술 |
+|---|---|
+| 언어 · 프레임워크 | Python 3.12 · pytest 8 (fixture scope, marker 슬라이스 `smoke`/`user`/`repos`/`issues`) |
+| HTTP 클라이언트 | requests (`Session` 재사용 — 헤더·연결 풀 일괄 관리, 인증 헤더 1회 세팅) |
+| API 검증 | 상태 코드 · 스키마 필드/타입 · 데이터 정합성 · 페이지네이션 · negative(404·422·인증 스코프) |
+| 리포팅 | Allure (epic/feature/story/step 4계층 + HTTP 요청별 Status·Body 자동 첨부) |
+| CI/CD | GitHub Actions — push·PR마다 테스트 실행 → Allure Report → **GitHub Pages 자동 배포**(trend 누적) |
+| 환경 관리 | python-dotenv (`.env`로 PAT·사용자명 분리, `.gitignore` 처리) |
+| 보조 도구 | Postman 컬렉션 (`postman/`) — 동일 엔드포인트 수동 탐색·재현용 |
 
 ---
 
 ## 테스트 구성
 
 | 파일 | 클래스 | TC | 검증 내용 |
-|---|---|---|---|
-| `test_user.py` | `TestPublicUser` | 6 | 공개 프로필 200, 스키마, login/type 정합성, 404, Content-Type |
-| | `TestAuthenticatedUser` | 3 | 인증 유저 200/401, 스키마, `/user/emails` 스코프별 응답 |
-| | `TestUserFollowers` | 3 | followers/following 200, list 타입 |
-| `test_repos.py` | `TestListRepositories` | 8 | 200, list 타입, 스키마, public 여부, 페이지네이션, 정렬, 404 |
-| | `TestGetRepository` | 8 | 200, name/owner 정합성, 스키마, 404, languages/topics/contributors |
-| `test_issues.py` | `TestListIssues` | 8 | 200, list 타입, state 필터(open/closed), 스키마, 페이지네이션, 422, 404 |
-| | `TestGetIssue` | 3 | 단건 200, 404, comments 200 |
-| **합계** | | **39** | **36 passed · 3 skipped** |
+|---|---|:---:|---|
+| `test_user.py` | `TestPublicUser` | 6 | 공개 프로필 200 · 스키마 · login/type 정합성 · 404 · Content-Type |
+| | `TestAuthenticatedUser` | 3 | 인증 유저 200/401 · 스키마 · `/user/emails` 스코프별 응답 |
+| | `TestUserFollowers` | 3 | followers/following 200 · list 타입 |
+| `test_repos.py` | `TestListRepositories` | 8 | 200 · list · 스키마 · public 보장 · 페이지네이션 · 정렬 · 404 |
+| | `TestGetRepository` | 8 | 200 · name/owner 정합성 · 스키마 · 404 · languages/topics/contributors |
+| `test_issues.py` | `TestListIssues` | 8 | 200 · list · state 필터(open/closed) · 스키마 · 페이지네이션 · 422 · 404 |
+| | `TestGetIssue` | 3 | 단건 200 · 404 · comments 200 |
+| **합계** | | **39** | **36 passed · 3 skipped · 0 failed** |
 
-> SKIPPED 3개는 대상 레포에 Issue가 없어 자동으로 건너뛴 것으로 정상 동작입니다.  
-> `pytest -m smoke`로 핵심 엔드포인트 5개만 빠르게 검증할 수 있습니다.
+> SKIPPED 3건은 대상 레포에 Issue가 없어 `pytest.skip()`으로 자동 건너뛴 정상 동작입니다. Issue가 생기면 자동 통과합니다.
+> `pytest -m smoke`로 핵심 엔드포인트 **5개**만 빠르게 검증할 수 있습니다.
 
 ---
 
-## 주요 구현 내용
+## 주요 구현
 
-### 1. GitHubAPIClient — Allure step 자동 기록
+### 1. GitHubAPIClient — HTTP 호출 추상화 + Allure 자동 기록
 
-**모든 HTTP 호출을 `allure.step`으로 감싸 어느 요청에서 무엇이 반환됐는지 리포트에서 추적할 수 있습니다.** 테스트 코드는 `client.get("/users/{username}")`만 호출하면 되고, 리포트에는 URL · Status Code · Response Body가 자동 첨부됩니다.
+테스트 코드는 `client.get("/users/{username}")`만 호출하면 되고, **URL · Status Code · Response Body가 리포트에 자동 첨부**됩니다. `requests.Session`을 재사용하므로 인증 헤더는 한 번만 세팅하면 이후 모든 요청에 자동 포함됩니다.
 
 ```python
 def get(self, endpoint: str, params: dict = None) -> requests.Response:
     url = f"{self.base_url}{endpoint}"
     with allure.step(f"GET {url}"):
         response = self.session.get(url, params=params)
-        allure.attach(str(response.status_code), name="Status Code", ...)
-        allure.attach(response.text, name="Response Body", ...)
+        self._attach(response)   # Status Code + Response Body 자동 첨부
     return response
 ```
 
-`requests.Session`을 재사용하므로 인증 헤더는 `session.headers`에 한 번만 세팅하면 이후 모든 요청에 자동으로 포함됩니다.
+> `_attach()`는 응답 `Content-Type`을 보고 JSON일 때만 JSON으로, 에러 HTML·rate-limit 페이지·빈 응답은 텍스트로 첨부해 Allure가 파싱에 실패하지 않게 했습니다.
 
-### 2. session scope fixture — 연결 재사용 + 실계정 레포 자동 탐지
+### 2. session-scope fixture — 연결 재사용 + 실계정 레포 자동 탐지
 
-**`public_repo` fixture는 테스트 계정의 공개 레포를 API로 자동으로 탐지해 오기 때문에, 레포 이름을 하드코딩하지 않아도 어떤 계정에서도 동작합니다.**
+`public_repo` fixture가 테스트 계정의 공개 레포를 **API로 직접 조회**해 오므로 레포명을 하드코딩하지 않아도 어떤 계정에서든 동작합니다. `client`·`username`·`public_repo` 세 fixture 모두 `session` scope라 HTTP 세션은 전체 실행에서 **1개만** 생성됩니다.
 
 ```python
 @pytest.fixture(scope="session")
 def public_repo(client, username) -> str:
-    response = client.get(f"/users/{username}/repos", params={"type": "public", "per_page": 1})
+    response = client.get(f"/users/{username}/repos", params={"type": "owner", "per_page": 1})
     if response.status_code != 200:
         pytest.skip(f"Could not fetch repos ({response.status_code}): {response.json().get('message')}")
     repos = response.json()
@@ -115,20 +94,9 @@ def public_repo(client, username) -> str:
     return repos[0]["name"]
 ```
 
-`client`, `username`, `public_repo` 세 fixture가 모두 `scope="session"`이므로 HTTP 세션은 테스트 전체에서 1개만 생성됩니다.
+### 3. negative 케이스 — 404 · 422 · 인증 스코프
 
-### 3. 음성(negative) 케이스 — 404, 422, 인증 스코프 검증
-
-**정상 동작 검증만큼 비정상 입력에 대한 응답이 올바른지 확인하는 것도 API 품질의 일부입니다.** 존재하지 않는 사용자·레포·이슈에 대한 404, 잘못된 파라미터(`state=invalid_state`)에 대한 422를 명시적으로 검증합니다.
-
-```python
-def test_list_issues_invalid_state_returns_422(self, ...):
-    response = client.get(f"/repos/{username}/{public_repo}/issues",
-                          params={"state": "invalid_state"})
-    assert response.status_code == 422
-```
-
-`/user/emails`는 PAT에 `user:email` 스코프가 없으면 GitHub이 404를 반환하는 것을 직접 확인하고 허용 코드에 추가했습니다.
+정상 동작만큼 **비정상 입력의 응답이 올바른지**가 API 품질의 일부입니다. 특히 `/user/emails`는 PAT에 `user:email` 스코프가 없으면 `401`도 `403`도 아닌 **`404`** 를 반환한다는 것을 직접 마주쳐, 허용 코드에 추가하고 *이유를 주석으로* 남겼습니다.
 
 ```python
 def test_list_public_emails_requires_auth(self, client):
@@ -139,82 +107,80 @@ def test_list_public_emails_requires_auth(self, client):
 
 ### 4. GitHub Actions CI + Allure Pages 자동 배포
 
-**`main` 브랜치에 push할 때마다 테스트가 자동 실행되고, 결과가 GitHub Pages에 배포됩니다.** Trend 히스토리는 `gh-pages` 브랜치에서 복사해 누적되므로, 매 빌드마다 과거 결과와 비교할 수 있습니다.
+`main` push·PR마다 `test` job이 테스트를 실행하고, `report` job이 Allure 리포트를 생성해 **GitHub Pages에 배포**합니다. `gh-pages`의 history를 복사해 trend가 누적되므로 빌드마다 과거 결과와 비교됩니다. **테스트가 실패해도 리포트는 배포**합니다 — 실패했을 때야말로 리포트가 가장 필요하기 때문입니다.
 
 ```
 push to main
-  └── test job
-        ├── pytest tests/ → allure-results/
-        └── upload artifact
-  └── report job (main only)
-        ├── download artifact
-        ├── copy gh-pages/history → allure-results/history  (trend 누적)
-        ├── allure generate
-        └── deploy to gh-pages
+ ├── test   : pytest → allure-results → upload artifact
+ └── report : download → allure generate (+ history 누적) → deploy to gh-pages
 ```
 
-PAT는 `GH_API_TOKEN` 이름으로 GitHub Secrets에 등록해 CI에 주입합니다. 워크플로 내장 `GITHUB_TOKEN`과 이름 충돌을 피하기 위해 별도 이름을 사용합니다.
+> PAT는 `GH_API_TOKEN`으로 GitHub Secrets에 등록해 주입합니다. 워크플로 내장 `GITHUB_TOKEN`과의 이름 충돌을 피하기 위해 별도 이름을 사용합니다.
 
 ---
 
-## 로컬 실행 방법
-
-### 1. 의존성 설치
+## 실행 방법
 
 ```bash
+# 1. 의존성 설치
 pip install -r requirements.txt
-```
 
-### 2. 환경 변수 설정
-
-`.env.example`을 복사해 `.env`를 생성하고 PAT를 입력합니다.
-
-```bash
+# 2. 환경 변수 설정 (.env.example 복사 후 실제 값 입력)
 cp .env.example .env
-```
+#   GITHUB_TOKEN=ghp_...   (repo, read:user 스코프면 충분)
+#   GITHUB_USERNAME=your_github_username
 
-```env
-GITHUB_TOKEN=ghp_your_personal_access_token_here
-GITHUB_USERNAME=your_github_username
-```
+# 3. 테스트 실행
+pytest tests/                # 전체 (39 TC)
+pytest tests/ -m smoke       # 핵심 엔드포인트 5개만 빠르게
+pytest tests/ -m user        # 영역별 (user / repos / issues)
+pytest tests/test_user.py -v # 특정 파일
 
-> PAT는 `repo`, `read:user` 스코프면 충분합니다. `user:email` 스코프 없이도 테스트는 통과합니다.
-
-### 3. 테스트 실행
-
-```bash
-# 전체 실행
-pytest tests/
-
-# smoke 테스트만 (5개, 빠른 검증)
-pytest tests/ -m smoke
-
-# API 영역별 실행
-pytest tests/ -m user
-pytest tests/ -m repos
-pytest tests/ -m issues
-
-# 특정 파일
-pytest tests/test_user.py -v
-```
-
-### 4. Allure 리포트 확인
-
-```bash
+# 4. Allure 리포트
 allure serve allure-results
 ```
 
-> Allure CLI가 없다면 `scoop install allure` (Windows) 또는 [공식 다운로드](https://allurereport.org/docs/install/)에서 설치합니다.
+> Allure CLI가 없다면 `scoop install allure`(Windows) 또는 [공식 문서](https://allurereport.org/docs/install/)로 설치합니다.
+> PAT 없이도 공개 엔드포인트 테스트는 동작하며, 인증 전용 테스트(`/user` 등)는 자동으로 skip됩니다.
 
 ---
 
-## 테스트 결과
+## 프로젝트 구조
 
-| 구분 | TC 수 | 결과 |
-|---|---|---|
-| User API | 12 | **12 passed** |
-| Repository API | 16 | **16 passed** |
-| Issues API | 11 | **8 passed · 3 skipped** |
-| **총계** | **39** | **36 passed · 3 skipped · 0 failed** |
+```
+GitHub_API/
+├── config/
+│   └── settings.py            # BASE_URL · 인증 헤더 · 환경변수 로드
+├── utils/
+│   └── api_client.py          # GitHubAPIClient — get/post/patch/delete + Allure step 자동 기록
+├── tests/
+│   ├── test_user.py           # User API — 공개 프로필 · 인증 유저 · followers/following (12 TC)
+│   ├── test_repos.py          # Repository API — 목록 · 단건 · languages/topics/contributors (16 TC)
+│   └── test_issues.py         # Issues API — 목록 · 단건 · comments · 페이지네이션 (11 TC)
+├── conftest.py                # client / username / public_repo (session-scope fixtures)
+├── postman/                   # Postman 컬렉션 (수동 탐색·재현용)
+├── .github/workflows/ci.yml   # 테스트 실행 → Allure Report → GitHub Pages 배포
+├── pytest.ini                 # allure 결과 경로 · marker 정의
+├── .env.example               # 환경 변수 템플릿
+└── requirements.txt
+```
 
-> SKIPPED는 대상 레포에 Issue가 없어 `pytest.skip()`으로 건너뛴 케이스입니다. Issue가 생기면 자동으로 통과합니다.
+---
+
+## 프로젝트 배경 & 회고
+
+> 본 레포는 UI 자동화 포트폴리오([helpy-chat-qa-automation](https://github.com/seonggwon21-tech/helpy-chat-qa-automation))와 별개로, **REST API 계약 검증** 역량을 따로 정리한 것입니다. 인증·다양한 응답 형태가 공개돼 있고 누구나 재현할 수 있는 GitHub REST API를 대상으로 골랐습니다.
+
+**Claude AI를 적극 활용해** 설계·구현 전 과정을 진행했습니다. 다만 UI 자동화와 달리 REST API 테스트는 **응답 자체가 계약(contract)** 이라는 점에 집중했습니다 — 상태 코드가 `200`인지 보는 것에 그치지 않고, 스키마 필드의 존재·데이터 타입·페이지네이션·negative 케이스까지 검증해야 비로소 "API가 올바르게 동작한다"고 말할 수 있다고 봤습니다.
+
+가장 기억에 남는 건 `/user/emails`였습니다. 인증이 필요한 엔드포인트라 당연히 `401`을 예상했는데, 실제로는 **`404`** 가 돌아왔습니다. PAT에 `user:email` 스코프가 없으면 GitHub이 "권한 없음"이 아니라 "없는 리소스"로 응답하기 때문이었습니다. 허용 코드에 `404`를 그냥 추가하는 대신, *왜 이런 코드가 나오는지*를 주석으로 남겨 다음 사람이 이해할 수 있게 했습니다. 같은 엔드포인트가 **토큰 스코프에 따라 다른 상태 코드를 반환**한다는 걸 직접 마주하니, API 테스트가 단순 호출 검증이 아니라는 게 와닿았습니다.
+
+<details>
+<summary>API 테스트를 만들며 세운 원칙</summary>
+
+- **상태 코드는 시작일 뿐** — 스키마 필드·타입·정합성까지 봐야 계약 검증
+- **거부 동작도 기능이다** — 404·422·인증 실패를 정상 케이스만큼 명시적으로 검증
+- **하드코딩을 줄인다** — 공개 레포를 fixture가 동적 탐지해 어떤 계정에서도 동작
+- **리포트는 실패할 때 가장 필요하다** — 테스트가 깨져도 Allure를 배포하고, 매 호출을 step으로 추적 가능하게
+
+</details>
