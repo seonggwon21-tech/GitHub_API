@@ -14,6 +14,12 @@ def username() -> str:
 
 
 @pytest.fixture(scope="session")
+def nonexistent_username() -> str:
+    """A username guaranteed not to exist — shared by the 404 negative cases."""
+    return "this-user-definitely-does-not-exist-xyzxyz999"
+
+
+@pytest.fixture(scope="session")
 def public_repo(client, username) -> str:
     """Returns the name of the first public repo found for the test user."""
     response = client.get(f"/users/{username}/repos", params={"type": "owner", "per_page": 1})

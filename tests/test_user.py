@@ -36,8 +36,8 @@ class TestPublicUser:
         assert response.json()["type"] == "User"
 
     @allure.story("Get public user profile")
-    def test_get_nonexistent_user_returns_404(self, client: GitHubAPIClient):
-        response = client.get("/users/this-user-definitely-does-not-exist-xyzxyz999")
+    def test_get_nonexistent_user_returns_404(self, client: GitHubAPIClient, nonexistent_username: str):
+        response = client.get(f"/users/{nonexistent_username}")
         assert response.status_code == 404
 
     @allure.story("Get public user profile")

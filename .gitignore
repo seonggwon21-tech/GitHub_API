@@ -7,4 +7,3 @@ allure-results/
 allure-report/
 htmlcov/
 .coverage
-report.html

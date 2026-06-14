@@ -63,8 +63,8 @@ class TestListRepositories:
         assert response.status_code in (200, 422)
 
     @allure.story("List repos for nonexistent user")
-    def test_list_repos_for_nonexistent_user_returns_404(self, client: GitHubAPIClient):
-        response = client.get("/users/this-user-definitely-does-not-exist-xyzxyz999/repos")
+    def test_list_repos_for_nonexistent_user_returns_404(self, client: GitHubAPIClient, nonexistent_username: str):
+        response = client.get(f"/users/{nonexistent_username}/repos")
         assert response.status_code == 404
 
 
