@@ -23,3 +23,23 @@
 - **#3 (보류)** — 영향이 private 샌드박스로 한정되고, 같은 이슈가 `new_issue` teardown에서 닫히므로 누수 비용이 작다. 클린업 일관성 차원에서 코멘트도 fixture로 빼는 개선 여지는 인지하고 남겨 둔다.
 
 > 점검 기준선: 50 TC / 47 passed · 3 skipped · 0 failed (read-only 환경).
+
+---
+
+## 2회차 — 2026-06-14 · 죽은 코드·중복 점검
+
+대상: `pytest.ini` · `requirements.txt` · `.gitignore` · `tests/*`
+관점: 미사용 설정/의존성, 중복 리포터, 하드코딩 중복
+
+| # | 발견 | 심각도 | 조치 | 근거 커밋 |
+|:---:|---|:---:|---|:---:|
+| 1 | `regression` 마커가 등록만 되고 사용처가 0 — 죽은 설정 | Low | 삭제 | `9904569` |
+| 2 | pytest-html(`report.html`)이 Allure와 중복되는 2차 리포터 — 커밋·CI·문서 어디에도 안 쓰이는데 매 실행 생성 | Low | addopts·의존성·gitignore·산출물 일괄 제거 | `9904569` |
+| 3 | 존재하지 않는 user 리터럴이 `test_user`·`test_repos`에 중복 하드코딩 | Low | `nonexistent_username` 공용 fixture로 통합 | `9904569` |
+
+### 처리 판단
+
+- **#1·#2 (수정)** — 셋 다 기능 영향은 없지만, 이 프로젝트의 리포팅 컨셉은 **Allure 하나**다. 보여주지도 않는 pytest-html이 매 실행 돌고 의존성까지 차지하는 건 "일관된 리포팅"이라는 의도와 어긋나 걷어냈다. 미사용 마커도 같은 맥락에서 정리했다.
+- **#3 (수정)** — 같은 매직 리터럴이 두 파일에 흩어져 있어, 값이 바뀌면 한쪽만 고칠 위험이 있었다. session fixture로 단일화해 negative 케이스 전체가 한 곳을 참조하게 했다.
+
+> 기준선 유지: 50 TC / 47 passed · 3 skipped · 0 failed. 1회차 보류 항목(#2 `public_repo` 410, #3 코멘트 fixture화)은 이번 점검 범위 밖으로, 여전히 열려 있다.
