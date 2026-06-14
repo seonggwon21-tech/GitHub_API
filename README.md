@@ -80,6 +80,7 @@ allure serve allure-results
 | [주요 구현 5선](docs/implementation.md) | API 클라이언트 추상화, 실계정 레포 자동 탐지, negative 케이스, CI 배포, write-path CRUD |
 | [테스트 케이스 명세서](docs/TEST_CASES.md) | 50개 TC 전체 — 시나리오·입력·기대결과·심각도 |
 | [코드 리뷰 로그](docs/code-review-log.md) | 소스 점검에서 발견한 문제와 처리 판단 (발견·심각도·조치) |
+| [트러블슈팅](docs/troubleshooting.md) | 구축·실행 중 실제로 막혔던 문제와 해결 과정 (8건) |
 
 ---
 
