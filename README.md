@@ -46,6 +46,8 @@
 
 ## 테스트 구성
 
+> 📋 **전체 테스트 케이스 명세서** → [`docs/TEST_CASES.md`](docs/TEST_CASES.md) *(50개 TC의 시나리오·입력·기대결과·심각도 상세)*
+
 | 파일 | 클래스 | TC | 검증 내용 |
 |---|---|:---:|---|
 | `test_user.py` | `TestPublicUser` | 6 | 공개 프로필 200 · 스키마 · login/type 정합성 · 404 · Content-Type |
@@ -190,6 +192,8 @@ GitHub_API/
 │   ├── test_issues.py         # Issues API (read) — 목록 · 단건 · comments · 페이지네이션 (11 TC)
 │   └── test_issues_crud.py    # Issues·Labels API (write) — 생성/수정/삭제 + teardown 정리 (11 TC)
 ├── conftest.py                # client / username / public_repo / write_repo (session-scope fixtures)
+├── docs/
+│   └── TEST_CASES.md          # 테스트 케이스 명세서 — 50 TC 시나리오·입력·기대결과·심각도
 ├── postman/                   # Postman 컬렉션 (수동 탐색·재현용)
 ├── .github/workflows/ci.yml   # 테스트 실행 → Allure Report → GitHub Pages 배포
 ├── pytest.ini                 # allure 결과 경로 · marker 정의
