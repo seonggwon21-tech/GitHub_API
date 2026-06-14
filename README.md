@@ -79,6 +79,7 @@ allure serve allure-results
 | [아키텍처 & 테스트 구성](docs/architecture.md) | 프로젝트 구조, 테스트 스위트 구성, marker 슬라이스, Allure 4계층 구성 |
 | [주요 구현 5선](docs/implementation.md) | API 클라이언트 추상화, 실계정 레포 자동 탐지, negative 케이스, CI 배포, write-path CRUD |
 | [테스트 케이스 명세서](docs/TEST_CASES.md) | 50개 TC 전체 — 시나리오·입력·기대결과·심각도 |
+| [코드 리뷰 로그](docs/code-review-log.md) | 소스 점검에서 발견한 문제와 처리 판단 (발견·심각도·조치) |
 
 ---
 
