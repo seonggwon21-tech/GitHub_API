@@ -1,6 +1,7 @@
 import pytest
+
+from config.settings import GITHUB_TOKEN, GITHUB_USERNAME, GITHUB_WRITE_REPO
 from utils.api_client import GitHubAPIClient
-from config.settings import GITHUB_USERNAME, GITHUB_TOKEN, GITHUB_WRITE_REPO
 
 
 @pytest.fixture(scope="session")
@@ -21,14 +22,22 @@ def nonexistent_username() -> str:
 
 @pytest.fixture(scope="session")
 def public_repo(client, username) -> str:
-    """Returns the name of the first public repo found for the test user."""
-    response = client.get(f"/users/{username}/repos", params={"type": "owner", "per_page": 1})
+    """Returns the name of a public repo whose Issues API is usable.
+
+    The read-only Issues suite hits `GET /repos/.../issues`, which returns 410
+    on repos that have Issues disabled (common on forks). Picking just the first
+    repo would intermittently false-fail, so we fetch a page and select the
+    first repo with `has_issues` enabled, falling back to the first repo only if
+    none qualify (the repo-only tests still work in that case).
+    """
+    response = client.get(f"/users/{username}/repos", params={"type": "owner", "per_page": 100})
     if response.status_code != 200:
         pytest.skip(f"Could not fetch repos ({response.status_code}): {response.json().get('message')}")
     repos = response.json()
     if not repos:
         pytest.skip("No public repositories found for this account.")
-    return repos[0]["name"]
+    with_issues = next((r for r in repos if r.get("has_issues")), None)
+    return (with_issues or repos[0])["name"]
 
 
 @pytest.fixture(scope="session")

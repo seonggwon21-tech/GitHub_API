@@ -7,6 +7,7 @@ clean up everything they create:
   - Comments and labels ARE deletable, so those teardowns delete (204).
 The whole module auto-skips when no PAT with `repo` scope is configured.
 """
+
 from uuid import uuid4
 
 import allure
@@ -40,6 +41,24 @@ def new_issue(client: GitHubAPIClient, username: str, write_repo: str):
 
 
 @pytest.fixture
+def new_comment(client: GitHubAPIClient, username: str, write_repo: str, new_issue):
+    """Create a comment on a fresh issue, then delete it on teardown.
+
+    Yields the raw POST response so a test can assert on the 201. Teardown delete
+    is idempotent, so a test is free to delete the comment itself — and if the
+    test fails mid-way, the sandbox is still cleaned up.
+    """
+    number = new_issue.json()["number"]
+    response = client.post(
+        f"/repos/{username}/{write_repo}/issues/{number}/comments",
+        payload={"body": "Comment from the QA write-path suite."},
+    )
+    yield response
+    if response.status_code == 201:
+        client.delete(f"/repos/{username}/{write_repo}/issues/comments/{response.json()['id']}")
+
+
+@pytest.fixture
 def created_label(client: GitHubAPIClient, username: str, write_repo: str):
     """Create a uniquely-named label, then delete it on teardown.
 
@@ -58,7 +77,6 @@ def created_label(client: GitHubAPIClient, username: str, write_repo: str):
 @allure.epic("GitHub REST API")
 @allure.feature("Issues API (write)")
 class TestIssueLifecycle:
-
     @allure.story("Create an issue")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_create_issue_returns_201(self, new_issue):
@@ -69,9 +87,7 @@ class TestIssueLifecycle:
         assert body["title"].startswith("[qa-bot] issue ")
 
     @allure.story("Read back a created issue")
-    def test_created_issue_is_readable(
-        self, client: GitHubAPIClient, username: str, write_repo: str, new_issue
-    ):
+    def test_created_issue_is_readable(self, client: GitHubAPIClient, username: str, write_repo: str, new_issue):
         created = new_issue.json()
         response = client.get(f"/repos/{username}/{write_repo}/issues/{created['number']}")
         assert response.status_code == 200
@@ -81,9 +97,7 @@ class TestIssueLifecycle:
 
     @allure.story("Update an issue")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_update_issue_title_returns_200(
-        self, client: GitHubAPIClient, username: str, write_repo: str, new_issue
-    ):
+    def test_update_issue_title_returns_200(self, client: GitHubAPIClient, username: str, write_repo: str, new_issue):
         number = new_issue.json()["number"]
         new_title = f"[qa-bot] edited {uuid4().hex[:8]}"
         response = client.patch(
@@ -97,9 +111,7 @@ class TestIssueLifecycle:
         assert readback.json()["title"] == new_title
 
     @allure.story("Close an issue")
-    def test_close_issue_returns_state_closed(
-        self, client: GitHubAPIClient, username: str, write_repo: str, new_issue
-    ):
+    def test_close_issue_returns_state_closed(self, client: GitHubAPIClient, username: str, write_repo: str, new_issue):
         number = new_issue.json()["number"]
         response = client.patch(
             f"/repos/{username}/{write_repo}/issues/{number}",
@@ -112,32 +124,18 @@ class TestIssueLifecycle:
 @allure.epic("GitHub REST API")
 @allure.feature("Issues API (write)")
 class TestIssueComment:
-
     @allure.story("Create and delete a comment")
     @allure.severity(allure.severity_level.NORMAL)
-    def test_comment_create_then_delete(
-        self, client: GitHubAPIClient, username: str, write_repo: str, new_issue
-    ):
-        number = new_issue.json()["number"]
-
-        with allure.step("Create comment -> 201"):
-            created = client.post(
-                f"/repos/{username}/{write_repo}/issues/{number}/comments",
-                payload={"body": "Comment from the QA write-path suite."},
-            )
-            assert created.status_code == 201, created.text
-            comment_id = created.json()["id"]
+    def test_comment_create_then_delete(self, client: GitHubAPIClient, username: str, write_repo: str, new_comment):
+        assert new_comment.status_code == 201, new_comment.text
+        comment_id = new_comment.json()["id"]
 
         with allure.step("Delete comment -> 204"):
-            deleted = client.delete(
-                f"/repos/{username}/{write_repo}/issues/comments/{comment_id}"
-            )
+            deleted = client.delete(f"/repos/{username}/{write_repo}/issues/comments/{comment_id}")
             assert deleted.status_code == 204
 
         with allure.step("Deleted comment is gone -> 404"):
-            gone = client.get(
-                f"/repos/{username}/{write_repo}/issues/comments/{comment_id}"
-            )
+            gone = client.get(f"/repos/{username}/{write_repo}/issues/comments/{comment_id}")
             assert gone.status_code == 404
 
 
@@ -156,9 +154,7 @@ class TestLabelCrud:
         assert response.json()["color"] == "ededed"
 
     @allure.story("Update a label")
-    def test_update_label_returns_200(
-        self, client: GitHubAPIClient, username: str, write_repo: str, created_label
-    ):
+    def test_update_label_returns_200(self, client: GitHubAPIClient, username: str, write_repo: str, created_label):
         _, name = created_label
         response = client.patch(
             f"/repos/{username}/{write_repo}/labels/{name}",
@@ -170,9 +166,7 @@ class TestLabelCrud:
 
     @allure.story("Delete a label")
     @allure.severity(allure.severity_level.CRITICAL)
-    def test_delete_label_returns_204(
-        self, client: GitHubAPIClient, username: str, write_repo: str, created_label
-    ):
+    def test_delete_label_returns_204(self, client: GitHubAPIClient, username: str, write_repo: str, created_label):
         _, name = created_label
         response = client.delete(f"/repos/{username}/{write_repo}/labels/{name}")
         assert response.status_code == 204
@@ -187,9 +181,7 @@ class TestWriteNegativeCases:
     bad writes with the right status codes."""
 
     @allure.story("Reject invalid writes")
-    def test_patch_nonexistent_issue_returns_404(
-        self, client: GitHubAPIClient, username: str, write_repo: str
-    ):
+    def test_patch_nonexistent_issue_returns_404(self, client: GitHubAPIClient, username: str, write_repo: str):
         response = client.patch(
             f"/repos/{username}/{write_repo}/issues/9999999",
             payload={"title": "should not work"},
@@ -197,9 +189,7 @@ class TestWriteNegativeCases:
         assert response.status_code == 404
 
     @allure.story("Reject invalid writes")
-    def test_create_issue_without_title_returns_422(
-        self, client: GitHubAPIClient, username: str, write_repo: str
-    ):
+    def test_create_issue_without_title_returns_422(self, client: GitHubAPIClient, username: str, write_repo: str):
         # `title` is required; GitHub validates the payload and returns 422.
         response = client.post(
             f"/repos/{username}/{write_repo}/issues",
