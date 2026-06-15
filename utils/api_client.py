@@ -1,5 +1,6 @@
-import requests
 import allure
+import requests
+
 from config.settings import BASE_URL, HEADERS
 
 # (connect, read) timeout in seconds. Without this, a stalled connection to
@@ -26,11 +27,7 @@ class GitHubAPIClient:
         # (error HTML, rate-limit pages, empty bodies) attach as plain text so
         # Allure does not choke trying to parse it.
         content_type = response.headers.get("Content-Type", "")
-        attachment_type = (
-            allure.attachment_type.JSON
-            if "json" in content_type.lower()
-            else allure.attachment_type.TEXT
-        )
+        attachment_type = allure.attachment_type.JSON if "json" in content_type.lower() else allure.attachment_type.TEXT
         allure.attach(response.text, name="Response Body", attachment_type=attachment_type)
 
     def get(self, endpoint: str, params: dict = None) -> requests.Response:

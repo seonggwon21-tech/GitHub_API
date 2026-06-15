@@ -1,0 +1,6 @@
+# Dev-only tooling — not needed to run the test suite in CI.
+# Install with:  pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+
+ruff==0.12.0
+pre-commit==4.2.0

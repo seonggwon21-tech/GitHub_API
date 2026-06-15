@@ -1,5 +1,6 @@
 import allure
 import pytest
+
 from utils.api_client import GitHubAPIClient
 
 
@@ -7,7 +8,6 @@ from utils.api_client import GitHubAPIClient
 @allure.feature("Issues API")
 @pytest.mark.issues
 class TestListIssues:
-
     @allure.story("List repository issues")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.smoke
@@ -83,7 +83,6 @@ class TestListIssues:
 @allure.feature("Issues API")
 @pytest.mark.issues
 class TestGetIssue:
-
     @allure.story("Get a single issue")
     @allure.severity(allure.severity_level.NORMAL)
     def test_get_first_issue_if_exists(self, client: GitHubAPIClient, username: str, public_repo: str):

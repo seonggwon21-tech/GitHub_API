@@ -1,5 +1,6 @@
 import allure
 import pytest
+
 from utils.api_client import GitHubAPIClient
 
 
@@ -7,7 +8,6 @@ from utils.api_client import GitHubAPIClient
 @allure.feature("User API")
 @pytest.mark.user
 class TestPublicUser:
-
     @allure.story("Get public user profile")
     @allure.severity(allure.severity_level.BLOCKER)
     @pytest.mark.smoke
@@ -50,15 +50,12 @@ class TestPublicUser:
 @allure.feature("User API")
 @pytest.mark.user
 class TestAuthenticatedUser:
-
     @allure.story("Get authenticated user")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.smoke
     def test_get_authenticated_user_returns_200_or_401(self, client: GitHubAPIClient):
         response = client.get("/user")
-        assert response.status_code in (200, 401), (
-            f"Unexpected status: {response.status_code}"
-        )
+        assert response.status_code in (200, 401), f"Unexpected status: {response.status_code}"
 
     @allure.story("Get authenticated user")
     def test_get_authenticated_user_schema_when_authed(self, client: GitHubAPIClient):
@@ -82,7 +79,6 @@ class TestAuthenticatedUser:
 @allure.feature("User API")
 @pytest.mark.user
 class TestUserFollowers:
-
     @allure.story("List user followers")
     def test_get_followers_returns_200(self, client: GitHubAPIClient, username: str):
         response = client.get(f"/users/{username}/followers")

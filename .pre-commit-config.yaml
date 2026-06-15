@@ -1,0 +1,9 @@
+# Run locally with:  pre-commit install   (then it runs on every commit)
+# Or one-off across the repo:  pre-commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.0
+    hooks:
+      - id: ruff          # lint, with autofix
+        args: [--fix]
+      - id: ruff-format   # format

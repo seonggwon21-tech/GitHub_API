@@ -1,5 +1,6 @@
 import allure
 import pytest
+
 from utils.api_client import GitHubAPIClient
 
 
@@ -7,7 +8,6 @@ from utils.api_client import GitHubAPIClient
 @allure.feature("Repository API")
 @pytest.mark.repos
 class TestListRepositories:
-
     @allure.story("List public repos for a user")
     @allure.severity(allure.severity_level.BLOCKER)
     @pytest.mark.smoke
@@ -72,7 +72,6 @@ class TestListRepositories:
 @allure.feature("Repository API")
 @pytest.mark.repos
 class TestGetRepository:
-
     @allure.story("Get a single repository")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.smoke
@@ -97,9 +96,20 @@ class TestGetRepository:
         response = client.get(f"/repos/{username}/{public_repo}")
         body = response.json()
         required = {
-            "id", "name", "full_name", "owner", "private",
-            "html_url", "description", "fork", "created_at", "updated_at",
-            "stargazers_count", "watchers_count", "forks_count", "default_branch",
+            "id",
+            "name",
+            "full_name",
+            "owner",
+            "private",
+            "html_url",
+            "description",
+            "fork",
+            "created_at",
+            "updated_at",
+            "stargazers_count",
+            "watchers_count",
+            "forks_count",
+            "default_branch",
         }
         for field in required:
             assert field in body, f"Missing field: {field}"

@@ -8,8 +8,12 @@ on:
 
 jobs:
   test:
-    name: Run Tests
+    name: Run Tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +21,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -28,8 +33,10 @@ jobs:
           GITHUB_USERNAME: seonggwon21-tech
         run: pytest tests/ --no-header -q
 
+      # The suite is identical across versions, so publish results from one
+      # version only — keeps the Allure report a single, un-duplicated run.
       - name: Upload allure results
-        if: always()
+        if: always() && matrix.python-version == '3.12'
         uses: actions/upload-artifact@v4
         with:
           name: allure-results

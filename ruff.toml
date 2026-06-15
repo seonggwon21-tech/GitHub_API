@@ -1,0 +1,10 @@
+# Ruff config (standalone — this project deliberately has no pyproject.toml).
+# CI targets Python 3.12; keep this in sync with requirements / README.
+target-version = "py312"
+# 120 keeps the descriptive test-method signatures (fixtures + type hints) on one
+# line; they read better unwrapped than split across lines.
+line-length = 120
+
+[lint]
+# E/W pycodestyle, F pyflakes, I import-sort, UP pyupgrade, B bugbear.
+select = ["E", "W", "F", "I", "UP", "B"]
