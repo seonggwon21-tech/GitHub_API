@@ -67,3 +67,26 @@
 - **#4·#5 (수정)** — 개선 백로그의 quick win 항목. 매트릭스는 동일 스위트를 두 버전에서 돌리되, Allure 리포트 중복을 막으려 결과 업로드는 3.12에서만 한다.
 
 > 기준선 유지: 50 TC / 47 passed · 3 skipped · 0 failed. `ruff check`·`ruff format --check` 클린.
+
+---
+
+## 4회차 — 2026-06-15 · 시드 레이어 + write 확장 점검
+
+대상: 신규 `tests/test_issues_seeded.py`·`utils/factories.py` · 확장 `conftest.py`(seed fixture)·`tests/test_issues_crud.py`·`utils/api_client.py`(put)
+관점: 시드/teardown 멱등성, 외부 API 검증 가정의 정확성, 테스트 결정성, 클린업 누수
+
+| # | 발견 | 심각도 | 조치 |
+|:---:|---|:---:|---|
+| 1 | seed 마일스톤 멱등 생성이 `GET /milestones?state=all`을 **per_page 없이** 조회 → 크래시한 이전 실행이 남긴 동일 title 마일스톤이 기본 30개 페이지 밖이면 삭제 못 함. **중복 title 생성은 422**(실측 확인)라 `POST` assert가 깨져 seeded 스위트 전체가 error | Medium | `per_page=100` 추가 |
+| 2 | `SEED_LABELS` 주석이 "라이프사이클 테스트가 재사용하는 항상 존재하는 라벨"이라 기술 → 실제로는 어떤 테스트도 안 쓰고 teardown에서 삭제됨(시드 이슈 태깅 용도) | Low | 주석을 실제 용도로 정정 |
+| 3 | lock/unlock 테스트가 lock 직후~unlock 전 단언에서 실패하면 이슈가 잠긴 채 잔존(`new_issue` teardown은 close만, unlock 안 함) | Low | 보류 |
+| 4 | 파라미터라이즈 negative의 `label-bad-color` 케이스가 **고정 이름** 사용 + teardown 안전망 없음 | Low | 보류 |
+
+### 처리 판단
+
+- **#1 (수정)** — 이번 라운드의 유일한 실질 리스크. 중복 마일스톤 title이 422임을 샌드박스에 실제 호출해 확인했고, 페이지네이션 누락이 드물지만 "크래시 후 재실행"에서 seeded 스위트 전체를 무너뜨릴 수 있어 `per_page=100`(다른 fixture와 일관)으로 막았다.
+- **#2 (수정)** — 동작엔 영향 없으나 다음 사람이 "이 라벨은 항상 있다"고 오해해 의존하면 깨진다. 주석을 사실(시드 이슈 태깅·세션 teardown 삭제)로 정정했다.
+- **#3 (보류)** — 영향이 private 샌드박스의 "잠긴 closed 이슈" 하나로 한정되고, 해피패스에선 마지막에 unlock한다. 방어적 try/finally는 테스트 가독성 대비 이득이 작아 인지만 하고 남겨 둔다.
+- **#4 (보류)** — 해당 케이스는 신뢰성 있게 422라 아무것도 생성되지 않는다(실측). GitHub이 정책을 바꿔 201을 주면 단언이 먼저 깨져 표면화되므로 잔존 라벨 리스크는 이론적이다.
+
+> 기준선: 73 TC / 70 passed · 3 skipped · 0 failed. `ruff check`·`ruff format --check` 클린. (라벨 필터 인덱스 지연·invalid state 무시 발견은 [트러블슈팅 #9·#10](troubleshooting.md)에 별도 기록)

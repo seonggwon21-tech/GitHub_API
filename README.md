@@ -1,7 +1,7 @@
 # GitHub REST API QA Automation
 
 > GitHub REST API(api.github.com)의 User · Repository · Issues · Labels 엔드포인트를 **pytest + requests**로 검증한 REST API 계약(contract) 검증 포트폴리오
-> — 총 **50 TC** · READ + **write-path(CRUD)** · GitHub Actions CI + Allure Pages 자동 배포
+> — 총 **73 TC** · READ + **write-path(CRUD)** + **시드 기반 결정적 조회** · GitHub Actions CI + Allure Pages 자동 배포
 
 ![Python](https://img.shields.io/badge/Python-3.12_|_3.13-blue?logo=python&logoColor=white)
 ![Ruff](https://img.shields.io/badge/ruff-lint_+_format-D7FF64?logo=ruff&logoColor=black)
@@ -17,13 +17,14 @@
 
 | 테스트 | 결과 | 검증 범위 | CI | 리포트 |
 |:---:|:---:|:---:|:---:|:---:|
-| **50 TC** (User 12·Repos 16·Issues 11·CRUD 11) | **47 passed · 3 skip · 0 fail** | 상태코드·스키마·정합성·**CRUD**·negative | **GitHub Actions** | **Allure Pages** |
+| **73 TC** (User 12·Repos 16·Issues 11·Seeded 7·CRUD 27) | **70 passed · 3 skip · 0 fail** | 상태코드·스키마·정합성·**라이프사이클 CRUD**·**결정적 조회**·negative | **GitHub Actions** | **Allure Pages** |
 
 **핵심 기능**
 
-- **READ를 넘어선 write-path(CRUD) 검증** — 이슈·라벨을 실제로 **생성(201)·수정(200)·삭제(204)** 하고 read-back으로 정합성을 확인. 전용 **샌드박스 레포**에서만 동작하고 `yield` teardown으로 생성물을 전부 정리(이슈 close·라벨/코멘트 delete)
+- **깊은 write-path 라이프사이클 검증** — 이슈(생성·수정·close·**reopen**·**lock/unlock**·라벨 적용/교체/제거), 코멘트(생성·**수정**·삭제), 라벨 full CRUD, **마일스톤**(생성→이슈 지정→close→삭제)까지. 전용 **샌드박스 레포**에서만 동작하고 `yield` teardown으로 생성물을 전부 정리
+- **시드 기반 결정적 조회** — 세션 시작 시 알려진 베이스라인(라벨·이슈 2 open+1 closed·마일스톤)을 깔고, 그 집합을 정확한 개수로 검증. "있으면 검사/없으면 skip"식 조건부 대신 **결정적 단언**. 세션 teardown으로 전부 정리
 - **상태 코드를 넘어선 계약 검증** — `200`만 보는 데 그치지 않고 응답 **스키마 필드·데이터 타입·정합성**(`login`/`owner` 일치, repo `private:false` 보장)까지 검증
-- **negative 케이스로 거부 동작까지** — 없는 user/repo/issue의 `404`, 잘못된 파라미터의 `422`, **필수값 누락·중복 라벨의 `422`** 까지 명시적으로 검증
+- **negative 케이스로 거부 동작까지** — 없는 user/repo/issue의 `404`, 잘못된 파라미터의 `422`, **필수값 누락·잘못된 color·중복 라벨의 `422`**(파라미터라이즈)까지 명시적으로 검증
 - **실계정 공개 레포 자동 탐지** — `public_repo` fixture가 공개 레포를 API로 동적 조회 → 레포명 하드코딩 0
 - **모든 HTTP 호출 Allure 자동 기록** — `GitHubAPIClient`가 매 요청을 `allure.step`으로 감싸 URL·Status·Body를 리포트에 자동 첨부
 
@@ -38,7 +39,7 @@
 |---|---|
 | 언어 · 프레임워크 | Python 3.12 / 3.13 (CI 매트릭스) · pytest 8 (fixture scope, `yield` teardown, marker 슬라이스) |
 | HTTP 클라이언트 | requests (`Session` 재사용 — 헤더·연결 풀 일괄 관리) |
-| API 검증 | 상태 코드 · 스키마 필드/타입 · 정합성 · 페이지네이션 · **CRUD write-path** · negative(404·422·인증 스코프) |
+| API 검증 | 상태 코드 · 스키마 필드/타입 · 정합성 · 페이지네이션 · **라이프사이클 CRUD**(이슈·코멘트·라벨·마일스톤) · **시드 기반 결정적 조회** · negative(404·422·인증 스코프) |
 | 리포팅 | Allure (epic/feature/story/step 4계층 + HTTP 요청별 Status·Body 자동 첨부) |
 | CI/CD | GitHub Actions — push·PR마다 테스트 → Allure Report → **GitHub Pages 자동 배포** |
 | 환경 관리 | python-dotenv (`.env`로 PAT·사용자명 분리) · Postman 컬렉션(`postman/`) |
@@ -60,10 +61,10 @@ cp .env.example .env
 #   GITHUB_WRITE_REPO=qa-sandbox   (write-path 전용 샌드박스 — 없으면 자동 생성)
 
 # 3. 테스트 실행
-pytest                  # 전체 (50 TC)
+pytest                  # 전체 (73 TC)
 pytest -m smoke         # 핵심 엔드포인트 5개만 빠르게
-pytest -m write         # write-path CRUD 11개만 (repo 스코프 PAT 필요, 없으면 자동 skip)
-pytest -m "not write"   # read-only만
+pytest -m write         # write-path + 시드 조회 34개 (repo 스코프 PAT 필요, 없으면 자동 skip)
+pytest -m "not write"   # read-only만 (39개, PAT 불필요)
 
 # 4. Allure 리포트
 allure serve allure-results
@@ -92,7 +93,7 @@ pre-commit install      # 커밋마다 ruff 자동 실행
 | [주요 구현 5선](docs/implementation.md) | API 클라이언트 추상화, 실계정 레포 자동 탐지, negative 케이스, CI 배포, write-path CRUD |
 | [테스트 케이스 명세서](docs/TEST_CASES.md) | 50개 TC 전체 — 시나리오·입력·기대결과·심각도 |
 | [코드 리뷰 로그](docs/code-review-log.md) | 소스 점검에서 발견한 문제와 처리 판단 (발견·심각도·조치) |
-| [트러블슈팅](docs/troubleshooting.md) | 구축·실행 중 실제로 막혔던 문제와 해결 과정 (8건) |
+| [트러블슈팅](docs/troubleshooting.md) | 구축·실행 중 실제로 막혔던 문제와 해결 과정 (10건) |
 
 ---
 

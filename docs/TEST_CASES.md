@@ -12,7 +12,7 @@
 | 항목 | 내용 |
 |------|------|
 | 테스트 목적 | GitHub REST API의 기능 동작, 응답 스키마, 상태 코드, 권한/검증 동작 검증 |
-| 테스트 범위 | User API, Repository API, Issues API(읽기), Issues/Labels API(쓰기 CRUD) |
+| 테스트 범위 | User API, Repository API, Issues API(읽기), 시드 기반 결정적 조회, Issues/Labels/Milestones API(쓰기 CRUD) |
 | 테스트 유형 | 기능(Functional), 계약/스키마(Contract), 경계/부정(Negative) |
 | 인증 방식 | PAT(Personal Access Token) — `Authorization: Bearer <token>` (`.env` 관리) |
 | 테스트 데이터 | 공개 유저/레포(읽기), 전용 샌드박스 레포 `qa-sandbox`(쓰기) |
@@ -136,58 +136,111 @@
 
 ---
 
-## 6. Issues / Labels API 테스트 케이스 (쓰기 CRUD)
+## 6. 시드 기반 결정적 조회 테스트 케이스
 
-**Feature:** Issues/Labels API (write) | **파일:** `tests/test_issues_crud.py`
+**Feature:** Issues/Milestones API (seeded) | **파일:** `tests/test_issues_seeded.py`
+**공통 사전조건:** `seed` 세션 fixture가 샌드박스에 알려진 베이스라인(라벨·이슈 2 open+1 closed·마일스톤)을 1회 생성. `repo` 스코프 PAT 필요(미충족 시 모듈 전체 skip).
+**결정성:** 모든 시드 이슈에 run-unique `session_label`을 부여 → 그 라벨로 필터하면 이전 실행 잔여물 없이 이번 실행 집합만 정확히 반환. (라벨 필터 인덱스 지연은 fixture가 setup에서 폴링 대기 → [트러블슈팅 #9](troubleshooting.md))
+
+| TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
+|-------|----------|------|-----------|--------|
+| SEED-001 | 시드 이슈 전체 개수 | `GET .../issues?labels={session}&state=all` | 정확히 `3`건 | CRITICAL |
+| SEED-002 | open 상태 필터 정확 개수 | `?labels={session}&state=open` | 정확히 `2`건 + 전부 `state=="open"` | NORMAL |
+| SEED-003 | closed 상태 필터 정확 개수 | `?labels={session}&state=closed` | 정확히 `1`건 + 전부 `state=="closed"` | NORMAL |
+| SEED-004 | 라벨 정합성 | `?labels={session}&state=all` | 반환 개수 일치 + 각 이슈가 `session_label` 보유 | NORMAL |
+| SEED-005 | 페이지네이션 정합성 | `?per_page=1&page=1..3` | 페이지별 1건 · 합집합이 시드 number와 정확히 일치 · 중복 없음 | NORMAL |
+| SEED-006 | 시드 마일스톤 조회 | `GET .../milestones/{number}` | `200` + title 일치 | NORMAL |
+| SEED-007 | 마일스톤 이슈 집계 | `GET .../milestones/{number}` | `open_issues==2` + `closed_issues==1` | NORMAL |
+
+---
+
+## 7. Issues / Labels / Milestones API 테스트 케이스 (쓰기 CRUD)
+
+**Feature:** Issues/Labels/Milestones API (write) | **파일:** `tests/test_issues_crud.py`
 **공통 사전조건:** `repo` 스코프 PAT 필요 / 샌드박스 레포(`qa-sandbox`)에서만 실행 / 미충족 시 모듈 전체 skip
-**클린업:** 이슈는 REST 하드 삭제 불가 → teardown에서 `closed` 처리 / 댓글·라벨은 DELETE(204)
+**클린업:** 이슈는 REST 하드 삭제 불가 → teardown에서 `closed` 처리 / 댓글·라벨·마일스톤은 DELETE
+**공통 도구:** 페이로드는 `utils/factories.py` 빌더(uuid 유니크 이름) 사용
 
-### 6.1 이슈 라이프사이클 (TestIssueLifecycle)
+### 7.1 이슈 라이프사이클 (TestIssueLifecycle)
 
 | TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
 |-------|----------|------|-----------|--------|
 | CRUD-001 | 이슈 생성 | `POST .../issues {title, body}` | `201` + `number`(int) + `state=="open"` + title 접두사 일치 | CRITICAL |
 | CRUD-002 | 생성 이슈 재조회 | `GET .../issues/{number}` | `200` + title/body가 POST한 값과 round-trip 일치 | NORMAL |
-| CRUD-003 | 이슈 제목 수정 | `PATCH .../issues/{number} {title}` | `200` + 응답 title 변경 + 재조회 시 영속 확인 | CRITICAL |
-| CRUD-004 | 이슈 닫기 | `PATCH .../issues/{number} {state:"closed"}` | `200` + `state=="closed"` | NORMAL |
+| CRUD-003 | 라벨 포함 생성 | `POST .../issues {title, labels}` | `201` + 응답 labels에 지정 라벨 포함 | NORMAL |
+| CRUD-004 | 이슈 제목 수정 | `PATCH .../issues/{number} {title}` | `200` + 응답 title 변경 + 재조회 시 영속 확인 | CRITICAL |
+| CRUD-005 | 이슈 본문 수정 | `PATCH .../issues/{number} {body}` | `200` + body 변경 | NORMAL |
+| CRUD-006 | 이슈 닫기 | `PATCH .../issues/{number} {state:"closed"}` | `200` + `state=="closed"` | NORMAL |
+| CRUD-007 | 이슈 닫기→재오픈 | `PATCH {state:"closed"}` → `PATCH {state:"open"}` | 각 단계 상태 전이 정확 | NORMAL |
+| CRUD-008 | 이슈 잠금/해제 | `PUT .../lock` → `DELETE .../lock` | 잠금 `204`·`locked==true` → 해제 `204`·`locked==false` | NORMAL |
 
-### 6.2 이슈 댓글 (TestIssueComment)
-
-| TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
-|-------|----------|------|-----------|--------|
-| CRUD-005 | 댓글 생성→삭제→검증 | `POST .../comments` → `DELETE .../comments/{id}` → `GET` | 생성 `201` → 삭제 `204` → 재조회 `404` | NORMAL |
-
-### 6.3 라벨 CRUD (TestLabelCrud)
+### 7.2 이슈 댓글 (TestIssueComment)
 
 | TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
 |-------|----------|------|-----------|--------|
-| CRUD-006 | 라벨 생성 | `POST .../labels {name, color, description}` | `201` + name 일치 + `color=="ededed"` | NORMAL |
-| CRUD-007 | 라벨 수정 | `PATCH .../labels/{name} {color, description}` | `200` + `color=="0e8a16"` + description 갱신 | NORMAL |
-| CRUD-008 | 라벨 삭제 | `DELETE .../labels/{name}` | `204` + 재조회 `404` | CRITICAL |
+| CRUD-009 | 댓글 생성→삭제→검증 | `POST .../comments` → `DELETE .../comments/{id}` → `GET` | 생성 `201` → 삭제 `204` → 재조회 `404` | NORMAL |
+| CRUD-010 | 댓글 수정 | `PATCH .../comments/{id} {body}` | `200` + body 변경 | NORMAL |
+| CRUD-011 | 댓글 목록 포함 | `GET .../issues/{number}/comments` | `200` + 생성한 comment id 포함 | NORMAL |
 
-### 6.4 부정 케이스 (TestWriteNegativeCases)
+### 7.3 이슈에 부착된 라벨 (TestIssueLabelsOnIssue)
 
 | TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
 |-------|----------|------|-----------|--------|
-| CRUD-009 | 존재하지 않는 이슈 수정 | `PATCH .../issues/9999999 {title}` | `404` | NORMAL |
-| CRUD-010 | title 없는 이슈 생성 | `POST .../issues {body}` (title 누락) | `422` (필수값 검증) | NORMAL |
-| CRUD-011 | 중복 라벨 생성 | 기존 name으로 `POST .../labels` | `422` (already_exists) | NORMAL |
+| CRUD-012 | 이슈 라벨 목록 | `GET .../issues/{number}/labels` | `200` + 부착 라벨 포함 | NORMAL |
+| CRUD-013 | 라벨 전체 교체(PUT) | `PUT .../issues/{number}/labels {labels:[]}` | `200` + `[]` + 재조회도 비어 있음 | NORMAL |
+| CRUD-014 | 라벨 단건 제거 | `DELETE .../issues/{number}/labels/{name}` | `200` + 남은 목록에 해당 라벨 없음 | NORMAL |
+
+### 7.4 라벨 CRUD (TestLabelCrud)
+
+| TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
+|-------|----------|------|-----------|--------|
+| CRUD-015 | 라벨 생성 | `POST .../labels {name, color, description}` | `201` + name 일치 + `color=="ededed"` | NORMAL |
+| CRUD-016 | 라벨 수정 | `PATCH .../labels/{name} {color, description}` | `200` + `color=="0e8a16"` + description 갱신 | NORMAL |
+| CRUD-017 | 라벨 삭제 | `DELETE .../labels/{name}` | `204` + 재조회 `404` | CRITICAL |
+
+### 7.5 마일스톤 라이프사이클 (TestMilestone)
+
+| TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
+|-------|----------|------|-----------|--------|
+| CRUD-018 | 마일스톤 생성 | `POST .../milestones {title}` | `201` + `number`(int) + `state=="open"` | NORMAL |
+| CRUD-019 | 이슈에 마일스톤 지정 | `PATCH .../issues/{number} {milestone}` | `200` + `milestone.number` 일치 | NORMAL |
+| CRUD-020 | 마일스톤 닫기 | `PATCH .../milestones/{number} {state:"closed"}` | `200` + `state=="closed"` | NORMAL |
+| CRUD-021 | 마일스톤 삭제 | `DELETE .../milestones/{number}` | `204` + 재조회 `404` | CRITICAL |
+
+### 7.6 멱등성 (TestWriteIdempotency)
+
+| TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
+|-------|----------|------|-----------|--------|
+| CRUD-022 | closed 이슈 재close | `PATCH {state:"closed"}` 2회 | 2회차도 `200` + `state=="closed"` 유지 | NORMAL |
+
+### 7.7 부정 케이스 (TestWriteNegativeCases)
+
+| TC ID | 시나리오 | 입력 | 기대 결과 | 심각도 |
+|-------|----------|------|-----------|--------|
+| CRUD-023 | 존재하지 않는 이슈 수정 | `PATCH .../issues/9999999 {title}` | `404` | NORMAL |
+| CRUD-024 | title 없는 이슈 생성 | `POST .../issues {body}` (title 누락) | `422` (필수값 검증) | NORMAL |
+| CRUD-025 | name 없는 라벨 생성 | `POST .../labels {color}` (name 누락) | `422` (필수값 검증) | NORMAL |
+| CRUD-026 | 잘못된 color 라벨 생성 | `POST .../labels {name, color:"zzzzzz"}` | `422` (hex 검증) | NORMAL |
+| CRUD-027 | 중복 라벨 생성 | 기존 name으로 `POST .../labels` | `422` (already_exists) | NORMAL |
+
+> CRUD-024~026은 `pytest.mark.parametrize`로 한 메서드에서 표 형태로 구동됩니다.
 
 ---
 
-## 7. 요약 통계
+## 8. 요약 통계
 
 | 영역 | 케이스 수 | smoke | 비고 |
 |------|-----------|-------|------|
 | User API | 12 | 2 | 읽기 |
 | Repository API | 16 | 2 | 읽기 |
 | Issues API (읽기) | 11 | 1 | 읽기 |
-| Issues/Labels (쓰기 CRUD) | 11 | - | 토큰 필요, 미충족 시 skip |
-| **합계** | **50** | **5** | |
+| 시드 기반 결정적 조회 | 7 | - | 토큰 필요(시드 생성), 미충족 시 skip |
+| Issues/Labels/Milestones (쓰기 CRUD) | 27 | - | 토큰 필요, 미충족 시 skip |
+| **합계** | **73** | **5** | |
 
 ---
 
-## 8. 실행 방법
+## 9. 실행 방법
 
 ```bash
 # 전체 실행

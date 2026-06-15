@@ -108,3 +108,33 @@ github_token: ${{ secrets.GITHUB_TOKEN }}     # 배포용 내장 토큰
 **원인** — 쓰기 테스트는 실데이터를 변경하므로 권한이 필요한데, read-only 환경에서도 무조건 실행됐다.
 
 **해결** — `write_repo` fixture가 토큰·push 권한을 사전 점검해, 없으면 `pytest.skip()`으로 **write 스위트 전체를 건너뛴다.** 토큰 없는 환경에서도 read-only 테스트는 그대로 통과한다.
+
+---
+
+## 9. 시드 이슈를 라벨로 필터하면 생성 직후 0건이 반환됨
+
+**증상** — 시드 fixture가 이슈를 만들고 곧바로 `GET .../issues?labels={세션라벨}`로 개수를 검증하는데, 0건이 돌아와 결정적 조회 테스트가 false-fail했다.
+
+**원인** — GitHub의 이슈 `labels=` 필터는 **검색 인덱스 기반**이라 생성 직후 즉시 반영되지 않는다. 실측 결과 약 **3초**의 인덱싱 지연이 있었다(단건 `GET .../issues/{number}` 직접 조회는 즉시 일관됨).
+
+**해결** — `seed` 세션 fixture가 setup 마지막에 라벨 필터 결과가 시드 개수와 일치할 때까지 **폴링 대기**(최대 30초, 2초 간격)한 뒤 데이터를 넘긴다. 대기는 세션당 1회뿐이라 개별 테스트는 결정적으로 동작한다.
+
+```python
+deadline = time.time() + 30
+while time.time() < deadline:
+    indexed = client.get(f"{base}/issues",
+                         params={"labels": session_label, "state": "all", "per_page": 100}).json()
+    if len(indexed) == len(issues):
+        break
+    time.sleep(2)
+```
+
+---
+
+## 10. 이슈에 잘못된 `state` 값을 PATCH해도 `422`가 아니라 `200`
+
+**증상** — 부정 케이스로 `PATCH .../issues/{number} {"state": "banana"}`가 `422`를 줄 것으로 예상했는데 `200`이 돌아왔다.
+
+**원인** — 이슈 목록 조회(`GET .../issues?state=invalid`)는 잘못된 enum에 `422`를 내지만, **PATCH는 인식하지 못하는 `state` 값을 조용히 무시**하고 기존 상태로 `200`을 반환한다. 같은 `state` 파라미터라도 엔드포인트마다 검증 정책이 다르다.
+
+**해결** — 해당 부정 케이스를 제거했다. 잘못된 가정(`422` 기대)을 검증하는 테스트는 오히려 계약을 잘못 문서화한다. 대신 신뢰할 수 있는 쓰기 `422`(title 누락·name 누락·잘못된 라벨 color·중복 라벨)를 파라미터라이즈로 묶어 검증한다.
