@@ -3,7 +3,8 @@
 > GitHub REST API(api.github.com)의 User · Repository · Issues · Labels 엔드포인트를 **pytest + requests**로 검증한 REST API 계약(contract) 검증 포트폴리오
 > — 총 **50 TC** · READ + **write-path(CRUD)** · GitHub Actions CI + Allure Pages 자동 배포
 
-![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12_|_3.13-blue?logo=python&logoColor=white)
+![Ruff](https://img.shields.io/badge/ruff-lint_+_format-D7FF64?logo=ruff&logoColor=black)
 ![pytest](https://img.shields.io/badge/pytest-8.x-0A9EDC?logo=pytest&logoColor=white)
 ![requests](https://img.shields.io/badge/requests-2.x-FF6B35?logo=python&logoColor=white)
 ![Allure](https://img.shields.io/badge/Allure-Report-FF6B6B?logo=qameta&logoColor=white)
@@ -35,7 +36,7 @@
 
 | 분류 | 사용 기술 |
 |---|---|
-| 언어 · 프레임워크 | Python 3.12 · pytest 8 (fixture scope, `yield` teardown, marker 슬라이스) |
+| 언어 · 프레임워크 | Python 3.12 / 3.13 (CI 매트릭스) · pytest 8 (fixture scope, `yield` teardown, marker 슬라이스) |
 | HTTP 클라이언트 | requests (`Session` 재사용 — 헤더·연결 풀 일괄 관리) |
 | API 검증 | 상태 코드 · 스키마 필드/타입 · 정합성 · 페이지네이션 · **CRUD write-path** · negative(404·422·인증 스코프) |
 | 리포팅 | Allure (epic/feature/story/step 4계층 + HTTP 요청별 Status·Body 자동 첨부) |
@@ -69,6 +70,17 @@ allure serve allure-results
 ```
 
 > PAT 없이도 공개 엔드포인트 테스트는 동작하며, 인증 전용 테스트(`/user` 등)와 write-path는 자동으로 skip됩니다.
+
+**개발 도구 (선택)**
+
+```bash
+# 린트/포맷 도구 포함 설치
+pip install -r requirements.txt -r requirements-dev.txt
+
+ruff check .            # 린트
+ruff format .           # 포맷
+pre-commit install      # 커밋마다 ruff 자동 실행
+```
 
 ---
 

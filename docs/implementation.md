@@ -24,18 +24,19 @@ def get(self, endpoint: str, params: dict = None) -> requests.Response:
 
 ## 2. session-scope fixture — 연결 재사용 + 실계정 레포 자동 탐지
 
-`public_repo` fixture가 테스트 계정의 공개 레포를 **API로 직접 조회**해 오므로 레포명을 하드코딩하지 않아도 어떤 계정에서든 동작합니다. `client`·`username`·`public_repo` 세 fixture 모두 `session` scope라 HTTP 세션은 전체 실행에서 **1개만** 생성됩니다.
+`public_repo` fixture가 테스트 계정의 공개 레포를 **API로 직접 조회**해 오므로 레포명을 하드코딩하지 않아도 어떤 계정에서든 동작합니다. 단순히 첫 레포를 고르면 그 레포의 Issues가 비활성/fork일 때 `GET .../issues`가 `410`을 내 false-fail이 날 수 있어, **`has_issues=true`인 레포를 우선 선택**합니다(없으면 첫 레포로 폴백). `client`·`username`·`public_repo` 세 fixture 모두 `session` scope라 HTTP 세션은 전체 실행에서 **1개만** 생성됩니다.
 
 ```python
 @pytest.fixture(scope="session")
 def public_repo(client, username) -> str:
-    response = client.get(f"/users/{username}/repos", params={"type": "owner", "per_page": 1})
+    response = client.get(f"/users/{username}/repos", params={"type": "owner", "per_page": 100})
     if response.status_code != 200:
         pytest.skip(f"Could not fetch repos ({response.status_code}): {response.json().get('message')}")
     repos = response.json()
     if not repos:
         pytest.skip("No public repositories found for this account.")
-    return repos[0]["name"]
+    with_issues = next((r for r in repos if r.get("has_issues")), None)
+    return (with_issues or repos[0])["name"]
 ```
 
 ---

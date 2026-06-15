@@ -57,8 +57,11 @@ GitHub_API/
 ├── postman/                   # Postman 컬렉션 (수동 탐색·재현용)
 ├── .github/workflows/ci.yml   # 테스트 실행 → Allure Report → GitHub Pages 배포
 ├── pytest.ini                 # allure 결과 경로 · marker 정의
+├── ruff.toml                  # 린트/포맷 설정 (standalone — pyproject 미사용 방침)
+├── .pre-commit-config.yaml    # 커밋 훅 — ruff check + format
 ├── .env.example               # 환경 변수 템플릿
-└── requirements.txt
+├── requirements.txt           # 런타임 의존성
+└── requirements-dev.txt       # 개발 도구 (ruff · pre-commit)
 ```
 
 ---

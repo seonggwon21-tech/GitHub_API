@@ -13,8 +13,8 @@
 | # | 발견 | 심각도 | 조치 | 근거 커밋 |
 |:---:|---|:---:|---|:---:|
 | 1 | `GitHubAPIClient`의 모든 HTTP 호출에 timeout이 없어, 연결이 멈추면 스위트·CI가 무한 대기 | High | `(5, 30)` connect/read timeout 적용 | `01b4e48` |
-| 2 | `public_repo` fixture가 정렬상 첫 레포를 그대로 선택 → 그 레포의 Issues가 비활성/fork면 `GET .../issues`가 `410`을 반환해 issue 테스트가 false-fail | Medium | 보류 | — |
-| 3 | `test_comment_create_then_delete`의 코멘트가 fixture가 아닌 본문에서 생성돼, 중간 단언 실패 시 샌드박스에 코멘트가 남음 | Low | 보류 | — |
+| 2 | `public_repo` fixture가 정렬상 첫 레포를 그대로 선택 → 그 레포의 Issues가 비활성/fork면 `GET .../issues`가 `410`을 반환해 issue 테스트가 false-fail | Medium | 보류 → **3회차 해결** | — |
+| 3 | `test_comment_create_then_delete`의 코멘트가 fixture가 아닌 본문에서 생성돼, 중간 단언 실패 시 샌드박스에 코멘트가 남음 | Low | 보류 → **3회차 해결** | — |
 
 ### 처리 판단
 
@@ -43,3 +43,27 @@
 - **#3 (수정)** — 같은 매직 리터럴이 두 파일에 흩어져 있어, 값이 바뀌면 한쪽만 고칠 위험이 있었다. session fixture로 단일화해 negative 케이스 전체가 한 곳을 참조하게 했다.
 
 > 기준선 유지: 50 TC / 47 passed · 3 skipped · 0 failed. 1회차 보류 항목(#2 `public_repo` 410, #3 코멘트 fixture화)은 이번 점검 범위 밖으로, 여전히 열려 있다.
+
+---
+
+## 3회차 — 2026-06-15 · 보류 항목 해소 + 도구/CI 강화
+
+대상: `conftest.py` · `tests/test_issues_crud.py` · `.github/workflows/ci.yml` · 신규 `ruff.toml` · `.pre-commit-config.yaml` · `requirements-dev.txt`
+관점: 1·2회차 보류 항목 종결, 정적 분석·CI 호환성 기반 마련
+
+| # | 항목 | 심각도 | 조치 |
+|:---:|---|:---:|---|
+| 1 | 1회차 #2 — `public_repo`가 첫 레포를 그대로 선택해 Issues 비활성/fork 레포에서 410 false-fail 가능 | Medium | `per_page=100`으로 받아 `has_issues=true`인 첫 레포를 선택, 없으면 첫 레포로 폴백 |
+| 2 | 1회차 #3 — 코멘트가 본문에서 생성돼 중간 실패 시 샌드박스에 잔존 | Low | `new_comment` fixture로 분리, teardown에서 idempotent 삭제 |
+| 3 | 정적 분석 부재 — 스타일/임포트 정렬이 사람 손에 의존 | Low | `ruff`(check+format) 도입, `.pre-commit-config.yaml`로 커밋 훅화. 전체 소스 1회 정렬·포맷 |
+| 4 | CI가 단일 Python(3.12)만 검증 | Low | `3.12`·`3.13` 매트릭스로 호환성 증명, `setup-python` pip 캐싱 추가 |
+| 5 | 런타임/개발 의존성 혼재 | Low | `requirements-dev.txt`(ruff·pre-commit)로 분리 |
+
+### 처리 판단
+
+- **#1 (수정)** — 환경 의존 취약성을 fixture 선택 로직에서 근본 차단했다. `has_issues` 필터로 Issues 스위트가 항상 사용 가능한 레포를 받게 하되, read-only 레포 테스트만 도는 계정을 위해 첫 레포 폴백을 남겼다.
+- **#2 (수정)** — 코멘트 생명주기를 fixture로 옮겨, 본문 단언이 중간에 깨져도 teardown이 샌드박스를 정리한다. `new_issue`·`created_label`과 teardown 패턴이 일관된다.
+- **#3 (수정)** — 이 레포는 `pyproject.toml`을 두지 않는 방침이라 `ruff.toml` 단독 설정으로 갔다. line-length는 서술형 테스트 시그니처를 한 줄로 유지하도록 120으로 잡았다.
+- **#4·#5 (수정)** — 개선 백로그의 quick win 항목. 매트릭스는 동일 스위트를 두 버전에서 돌리되, Allure 리포트 중복을 막으려 결과 업로드는 3.12에서만 한다.
+
+> 기준선 유지: 50 TC / 47 passed · 3 skipped · 0 failed. `ruff check`·`ruff format --check` 클린.
