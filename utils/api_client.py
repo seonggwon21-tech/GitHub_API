@@ -51,6 +51,13 @@ class GitHubAPIClient:
             self._attach(response)
         return response
 
+    def put(self, endpoint: str, payload: dict = None) -> requests.Response:
+        url = f"{self.base_url}{endpoint}"
+        with allure.step(f"PUT {url}"):
+            response = self.session.put(url, json=payload, timeout=DEFAULT_TIMEOUT)
+            self._attach(response)
+        return response
+
     def delete(self, endpoint: str) -> requests.Response:
         url = f"{self.base_url}{endpoint}"
         with allure.step(f"DELETE {url}"):
