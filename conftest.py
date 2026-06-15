@@ -83,15 +83,15 @@ def write_repo(client, username) -> str:
     return GITHUB_WRITE_REPO
 
 
-# Fixed-name labels seeded once per session — they tag the seed issues so the
-# baseline mirrors a realistic repo. Created and torn down with the seed; the
-# run-unique `session_label` (not these) is what the deterministic reads filter on.
-SEED_LABELS = {
-    "seed-bug": "d73a4a",
-    "seed-enhancement": "a2eeef",
-    "seed-wontfix": "ffffff",
+# Colours for the seed labels that tag the seed issues (kind -> hex). The actual
+# label names are generated unique PER SESSION inside `seed` — concurrent CI
+# jobs (the 3.12/3.13 matrix) share one sandbox, so fixed names would collide
+# (a name already exists -> 422; or one job's delete-if-exists wipes another's).
+SEED_LABEL_COLORS = {
+    "bug": "d73a4a",
+    "enhancement": "a2eeef",
+    "wontfix": "ffffff",
 }
-SEED_MILESTONE_TITLE = "seed-milestone"
 
 
 @dataclass
@@ -112,10 +112,10 @@ class SeedData:
 
     repo: str
     session_label: str
-    labels: list[str]  # the fixed-name seed labels (SEED_LABELS keys)
+    labels: list[str]  # the per-session seed label names tagging the issues
+    milestone_title: str
     issues: list[SeededIssue] = field(default_factory=list)
     milestone_number: int = 0
-    milestone_title: str = SEED_MILESTONE_TITLE
 
     @property
     def open_count(self) -> int:
@@ -130,49 +130,45 @@ class SeedData:
 def seed(client: GitHubAPIClient, username: str, write_repo: str) -> SeedData:
     """Lay down a known baseline in the sandbox, then tear it all down.
 
-    Creates fixed-name labels, a unique per-session label, three issues
-    (2 open + 1 closed, each tagged with the session label and a milestone) and
-    one milestone. Every artifact is tracked and removed on session teardown —
-    issues are closed (no REST hard-delete), labels/milestones are deleted.
-    Creation is idempotent (delete-if-exists), so a crashed prior run can't
-    poison the next one. Inherits the `write_repo` token gate, so a read-only
-    run skips the whole seed-dependent suite.
+    Creates seed labels, a session label, three issues (2 open + 1 closed, each
+    tagged with the session label and a milestone) and one milestone. Every
+    artifact is tracked and removed on session teardown — issues are closed (no
+    REST hard-delete), labels/milestones are deleted.
+
+    Every created name is suffixed with a run-unique token, so two jobs seeding
+    the same sandbox concurrently (the CI version matrix) never collide. We
+    therefore do NOT delete-if-exists: unique names can't pre-exist, and a
+    blind delete would be the very thing that wipes a sibling job's data.
+    Inherits the `write_repo` token gate, so a read-only run skips the suite.
     """
     base = f"/repos/{username}/{write_repo}"
+    suffix = factories.unique_suffix()
     created_issues: list[int] = []
     created_labels: list[str] = []
     created_milestones: list[int] = []
 
     def make_label(name: str, color: str) -> str:
-        # delete-if-exists so a leftover label from a crashed run doesn't 422.
-        client.delete(f"{base}/labels/{name}")
         resp = client.post(f"{base}/labels", payload=factories.label_payload(name=name, color=color))
         assert resp.status_code == 201, resp.text
         created_labels.append(name)
         return name
 
-    for label_name, label_color in SEED_LABELS.items():
-        make_label(label_name, label_color)
+    # Per-session seed labels (kind -> unique name) plus the filter label.
+    seed_labels = {kind: make_label(f"seed-{kind}-{suffix}", color) for kind, color in SEED_LABEL_COLORS.items()}
+    session_label = make_label(f"seed-session-{suffix}", "0e8a16")
 
-    session_label = f"seed-session-{factories.unique_suffix()}"
-    make_label(session_label, "0e8a16")
-
-    # Milestone — delete any stale same-title one first, then create fresh.
-    # Page fully: GitHub rejects a duplicate milestone title with 422, so a
-    # stale one left beyond the default page size must still be found and removed.
-    for milestone in client.get(f"{base}/milestones", params={"state": "all", "per_page": 100}).json():
-        if milestone.get("title") == SEED_MILESTONE_TITLE:
-            client.delete(f"{base}/milestones/{milestone['number']}")
-    ms_resp = client.post(f"{base}/milestones", payload=factories.milestone_payload(title=SEED_MILESTONE_TITLE))
+    # Milestone — unique title, so no stale-cleanup (and no duplicate-title 422).
+    milestone_title = f"seed-milestone-{suffix}"
+    ms_resp = client.post(f"{base}/milestones", payload=factories.milestone_payload(title=milestone_title))
     assert ms_resp.status_code == 201, ms_resp.text
     milestone_number = ms_resp.json()["number"]
     created_milestones.append(milestone_number)
 
     # Three issues: 2 open + 1 closed, all tagged with the session label.
     specs = [
-        ("[qa-bot] seed open bug", ["seed-bug"], "open"),
-        ("[qa-bot] seed open enhancement", ["seed-enhancement"], "open"),
-        ("[qa-bot] seed closed wontfix", ["seed-wontfix"], "closed"),
+        (f"[qa-bot] seed open bug {suffix}", [seed_labels["bug"]], "open"),
+        (f"[qa-bot] seed open enhancement {suffix}", [seed_labels["enhancement"]], "open"),
+        (f"[qa-bot] seed closed wontfix {suffix}", [seed_labels["wontfix"]], "closed"),
     ]
     issues: list[SeededIssue] = []
     for title, labels, target_state in specs:
@@ -203,7 +199,8 @@ def seed(client: GitHubAPIClient, username: str, write_repo: str) -> SeedData:
     data = SeedData(
         repo=write_repo,
         session_label=session_label,
-        labels=list(SEED_LABELS),
+        labels=list(seed_labels.values()),
+        milestone_title=milestone_title,
         issues=issues,
         milestone_number=milestone_number,
     )
