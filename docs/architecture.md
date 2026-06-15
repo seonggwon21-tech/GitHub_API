@@ -15,8 +15,6 @@
 | | `TestGetRepository` | 8 | 200 · name/owner 정합성 · 스키마 · 404 · languages/topics/contributors |
 | `test_issues.py` | `TestListIssues` | 8 | 200 · list · state 필터(open/closed) · 스키마 · 페이지네이션 · 422 · 404 |
 | | `TestGetIssue` | 3 | 단건 200 · 404 · comments 200 |
-| `test_issues_seeded.py` | `TestSeededIssueQueries` | 5 | 시드 라벨 필터 정확 개수 · open/closed 상태 필터 · 라벨 정합성 · 페이지네이션 |
-| | `TestSeededMilestone` | 2 | 시드 마일스톤 조회 · open/closed 이슈 집계 |
 | `test_issues_crud.py` | `TestIssueLifecycle` | 8 | 생성 201(라벨 포함) · read-back · title/body 수정 · close · **reopen** · **lock/unlock** |
 | | `TestIssueComment` | 3 | 코멘트 생성 201 → **수정 200** → 목록 포함 → 삭제 204 → 404 |
 | | `TestIssueLabelsOnIssue` | 3 | 이슈 라벨 목록 · **전체 교체(PUT)** · 단건 제거 |
@@ -24,7 +22,7 @@
 | | `TestMilestone` | 4 | 마일스톤 생성 → 이슈 지정 → close → **삭제 204** |
 | | `TestWriteIdempotency` | 1 | 이미 closed인 이슈 재close가 200·closed 유지 |
 | | `TestWriteNegativeCases` | 5 | 없는 이슈 PATCH 404 · 잘못된 생성 페이로드 422(파라미터라이즈) · 중복 라벨 422 |
-| **합계** | | **73** | **70 passed · 3 skipped · 0 failed** |
+| **합계** | | **66** | **63 passed · 3 skipped · 0 failed** |
 
 > 전체 TC의 시나리오·입력·기대결과·심각도는 **[테스트 케이스 명세서](TEST_CASES.md)** 참고.
 
@@ -37,7 +35,7 @@
 | `write` | 실데이터 변경(CRUD) — `repo` 스코프 PAT 없으면 자동 skip |
 
 > SKIPPED 3건은 대상 레포(공개 포트폴리오 repo)에 Issue가 없어 `pytest.skip()`으로 자동 건너뛴 정상 동작입니다. Issue가 생기면 자동 통과합니다.
-> `write` 마커가 붙은 34 TC(write-path 27 + seeded 7)는 `repo` 스코프 PAT가 없으면 `write_repo` fixture가 **전체를 자동 skip**합니다. seeded 조회 테스트도 시드 생성(쓰기)이 필요해 같은 게이트를 공유합니다.
+> `write` 마커가 붙은 27 TC(write-path CRUD)는 `repo` 스코프 PAT가 없으면 `write_repo` fixture가 **전체를 자동 skip**합니다.
 
 ---
 
@@ -54,9 +52,8 @@ GitHub_API/
 │   ├── test_user.py           # User API — 공개 프로필 · 인증 유저 · followers/following (12 TC)
 │   ├── test_repos.py          # Repository API — 목록 · 단건 · languages/topics/contributors (16 TC)
 │   ├── test_issues.py         # Issues API (read) — 목록 · 단건 · comments · 페이지네이션 (11 TC)
-│   ├── test_issues_seeded.py  # 시드 기반 결정적 조회 — 라벨/상태 필터 · 페이지네이션 · 마일스톤 (7 TC)
 │   └── test_issues_crud.py    # Issues·Labels·Milestones API (write) — 라이프사이클 CRUD + teardown (27 TC)
-├── conftest.py                # client / username / public_repo / write_repo / seed (session-scope fixtures)
+├── conftest.py                # client / username / public_repo / write_repo (session-scope fixtures)
 ├── docs/
 │   ├── TEST_CASES.md          # 테스트 케이스 명세서 — 시나리오·입력·기대결과·심각도
 │   ├── architecture.md        # 이 문서 — 프로젝트 구조 · 테스트 구성
@@ -80,7 +77,7 @@ GitHub_API/
 | 계층 | 값 |
 |---|---|
 | epic | `GitHub REST API` |
-| feature | `User API` / `Repository API` / `Issues API` / `Issues API (seeded)` / `Issues API (write)` / `Labels API (write)` / `Milestones API (write)` |
+| feature | `User API` / `Repository API` / `Issues API` / `Issues API (write)` / `Labels API (write)` / `Milestones API (write)` |
 | story | `Get public user profile`, `Create an issue`, `Delete a label` 등 |
 | step | 매 HTTP 호출 (`GET /users/...`) — Status·Body 첨부 |
 

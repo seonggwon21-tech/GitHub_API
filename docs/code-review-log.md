@@ -84,9 +84,26 @@
 
 ### 처리 판단
 
-- **#1 (수정 → 후속 대체)** — 중복 마일스톤 title이 422임을 실측 확인하고 일단 `per_page=100`으로 보강했다. 단, 이후 CI 매트릭스에서 **공용 샌드박스 동시성 버그**(고정 이름 + delete-if-exists가 형제 잡 데이터를 삭제 → `422 invalid milestone`)가 터지면서, stale 정리 로직 자체를 없애고 seed 리소스를 **run-unique 이름**으로 바꿨다. 그 결과 이 `per_page` 보강은 무의미해져 함께 제거됐다. 상세는 [트러블슈팅 #11](troubleshooting.md).
+- **#1 (수정 → 후속 대체)** — 중복 마일스톤 title이 422임을 실측 확인하고 일단 `per_page=100`으로 보강했다. 단, 이후 CI 매트릭스에서 **공용 샌드박스 동시성 버그**(고정 이름 + delete-if-exists가 형제 잡 데이터를 삭제 → `422 invalid milestone`)가 터지면서, stale 정리 로직 자체를 없애고 seed 리소스를 **run-unique 이름**으로 바꿨다. 그 결과 이 `per_page` 보강은 무의미해져 함께 제거됐다. (이 seed 레이어는 이후 5회차에서 통째로 제거된다.)
 - **#2 (수정)** — 동작엔 영향 없으나 다음 사람이 "이 라벨은 항상 있다"고 오해해 의존하면 깨진다. 주석을 사실(시드 이슈 태깅·세션 teardown 삭제)로 정정했다.
 - **#3 (보류)** — 영향이 private 샌드박스의 "잠긴 closed 이슈" 하나로 한정되고, 해피패스에선 마지막에 unlock한다. 방어적 try/finally는 테스트 가독성 대비 이득이 작아 인지만 하고 남겨 둔다.
 - **#4 (보류)** — 해당 케이스는 신뢰성 있게 422라 아무것도 생성되지 않는다(실측). GitHub이 정책을 바꿔 201을 주면 단언이 먼저 깨져 표면화되므로 잔존 라벨 리스크는 이론적이다.
 
-> 기준선: 73 TC / 70 passed · 3 skipped · 0 failed. `ruff check`·`ruff format --check` 클린. (라벨 필터 인덱스 지연·invalid state 무시 발견은 [트러블슈팅 #9·#10](troubleshooting.md)에 별도 기록)
+> 기준선: 73 TC / 70 passed · 3 skipped · 0 failed. `ruff check`·`ruff format --check` 클린. (invalid state 무시 발견은 [트러블슈팅](troubleshooting.md)에 별도 기록)
+
+---
+
+## 5회차 — 2026-06-15 · 범위 단순화 (소유 가능성 우선)
+
+대상: `tests/test_issues_seeded.py`(삭제)·`conftest.py`(seed 레이어 제거)
+관점: 코드 정교함 < **작성자가 끝까지 설명/유지할 수 있는 범위**
+
+| # | 결정 | 조치 |
+|:---:|---|---|
+| 1 | seed 레이어(세션 시딩 + registry teardown + run-unique 동시성 네이밍 + 라벨 인덱스 폴링)는 이 포트폴리오에서 **가장 설명하기 어려운 덩어리**였다. 정교하지만 면접에서 방어하기 부담 | `tests/test_issues_seeded.py`(7 TC)와 `seed` fixture·`SeedData` 전부 제거 |
+
+### 처리 판단
+
+- **#1 (제거)** — "결정적 조회" 스토리는 멋졌지만, 포트폴리오의 가치는 *작성자가 소유한 범위*다. seed가 빠지면 3·4회차에서 다룬 seed 관련 발견(인덱스 지연·동시성)도 대상 코드가 사라져 히스토릭 기록으로만 남는다. write CRUD(27 TC)·CI 매트릭스·factories 등 **설명 가능한 핵심**은 그대로 유지했다. read 스위트는 다시 "있으면 검사/없으면 skip" 조건부로 돌아가지만, 이 단순함이 의도된 트레이드오프다.
+
+> 기준선: **66 TC / 63 passed · 3 skipped · 0 failed.** `ruff check`·`ruff format --check` 클린.
